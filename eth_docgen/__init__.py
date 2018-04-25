@@ -9,7 +9,7 @@ def error_exit(message):
 
 def main():
     parser = argparse.ArgumentParser(description="Ethereum HTML Document Generator", epilog="\n\n")
-    parser.add_argument("-o", "--output", metavar='file', help="Output file")
+    parser.add_argument("-o", "--output", metavar='dir', help="Output directory")
 
     parser.add_argument("-a", "--abi", metavar='file', help="Contract abi", required=True)
 

@@ -1,5 +1,5 @@
 from yattag import Doc
-import os, subprocess, sys
+import os, pathlib, subprocess, sys
 import json, re
 from cgi import escape
 
@@ -289,7 +289,7 @@ def contract_info(filename, compile_result):
 
     return [info, ast]
 
-def compile_and_generate(contract, out_file):
+def compile_and_generate(contract, out_dir):
     solc = get_solc()
     if not solc:
         print("Error - solc not found in path")
@@ -316,11 +316,11 @@ def compile_and_generate(contract, out_file):
 
     [data, ast] = contract_info(contract, output)
 
-    generate_docs(source, data, ast, out_file)
+    generate_docs(source, data, ast, out_dir)
 
 # Generate solidity html docs from metadata file
 #   produced using: solc --metadata ... 
-def generate_docs(source, info, ast, out_file):
+def generate_docs(source, info, ast, out_dir):
 
     pragmas = []
     base_contracts = []
@@ -339,6 +339,8 @@ def generate_docs(source, info, ast, out_file):
     print('Compiler version: {}'.format(metadata['compiler']['version']))
     source_lines = source.split('\n')
 
+    pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True) 
+    out_file = os.path.join(out_dir, '{}.html'.format(name))
     with open(out_file, 'w') as f:
         doc, tag, text, line = Doc().ttl()
         make_js(line, json.dumps(info['abi']), source, info['bin'])
