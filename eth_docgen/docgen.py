@@ -1,7 +1,10 @@
 from yattag import Doc
-import os, pathlib, subprocess, sys
+import os, pathlib, shutil, subprocess, sys
 import json, re
 from cgi import escape
+
+DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'data'))
+CSS_FILE = os.path.join(DATA_DIR, 'doc.css')
 
 def deconstruct_pragma(pragma):
     if pragma[0] == 'solidity':
@@ -26,7 +29,7 @@ def make_js(line, abi, source, bytecode):
         function copyOnClick(text) {{ return function() {{ copyToClipboard(text); }}}}
         window.onload = function() {{
             document.getElementById("copy_abi").onclick = copyOnClick('{abi}');
-            //document.getElementById("copy_source").onclick = copyOnClick('{source}');
+            document.getElementById("copy_source").onclick = copyOnClick({source});
             document.getElementById("copy_bytecode").onclick = copyOnClick('{bytecode}');
         }}
     """.format(abi=abi, source=json.dumps(source), bytecode=escape(bytecode)))
@@ -80,11 +83,8 @@ def full_type(type_node):
     return type_node['attributes']['type']
 
 # variable is an AST node that represents a state variable
-def type_name(decl_node, full=False):
-    if decl_node['name'] == 'ElementaryTypeName':
-        return decl_node['attributes']['name']
-
-    type_node = decl_node['children'][0]
+def type_name(type_node, full=False):
+    
     if type_node['name'] == 'ArrayTypeName':
         if full:
             return full_type(type_node)
@@ -148,7 +148,7 @@ def var_comments(source_lines, name, var_type):
 def custom_display_fn(source_lines, showVisibility=False, comment_fn=var_comments):
     cols = '1' if showVisibility else '2'
     def display_fn(tag, line, item):
-        tname = type_name(item)
+        tname = type_name(item['children'][0])
         name = item['attributes']['name']
         desc = '<br />'.join(comment_fn(source_lines, name, tname)['notice'])
 
@@ -210,11 +210,11 @@ def devdoc_param(meta_doc, fn_sig, param):
     return ''
 
 def abi_signature(function):
-    params = ','.join(type_name(n, full=True) for n in function['children'][0]['children'])
+    params = ','.join(type_name(n['children'][0], full=True) for n in function['children'][0]['children'])
     return "{}({})".format(function['name'], params)
 
 def var_list(param_node):
-    return [(type_name(n), n['attributes']['name']) for n in param_node]
+    return [(type_name(n['children'][0]), n['attributes']['name']) for n in param_node]
 
 def fn_signature(tag, line, text, function):
     text(function['attributes']['name']+'(')
@@ -257,7 +257,7 @@ def make_functions(tag, line, text, contract, meta_doc, source_lines):
         line('div', userdoc_notice(meta_doc, signature), klass='function_desc')
 
         def display_fn(tag, line, item):
-            tname = type_name(item)
+            tname = type_name(item['children'][0])
             name = item['attributes']['name']
             desc = devdoc_param(meta_doc, signature, name)
             with tag('td', klass="info", colspan='2'):
@@ -289,7 +289,7 @@ def contract_info(filename, compile_result):
 
     return [info, ast]
 
-def compile_and_generate(contract, out_dir):
+def compile_contract(contract):
     solc = get_solc()
     if not solc:
         print("Error - solc not found in path")
@@ -314,13 +314,12 @@ def compile_and_generate(contract, out_dir):
     with open(contract, 'r') as f:
         source = f.read()
 
-    [data, ast] = contract_info(contract, output)
-
-    generate_docs(source, data, ast, out_dir)
+    [info, ast] = contract_info(contract, output)
+    return [source, info, ast]
 
 # Generate solidity html docs from metadata file
 #   produced using: solc --metadata ... 
-def generate_docs(source, info, ast, out_dir):
+def generate_docs(source, info, ast, out_dir, inline=False):
 
     pragmas = []
     base_contracts = []
@@ -339,11 +338,18 @@ def generate_docs(source, info, ast, out_dir):
     print('Compiler version: {}'.format(metadata['compiler']['version']))
     source_lines = source.split('\n')
 
+    with open(CSS_FILE, 'r') as f:
+        css = f.read()
+
     pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True) 
     out_file = os.path.join(out_dir, '{}.html'.format(name))
     with open(out_file, 'w') as f:
         doc, tag, text, line = Doc().ttl()
         make_js(line, json.dumps(info['abi']), source, info['bin'])
+        if inline:
+            line('style', css)
+        else:
+            doc.asis('<link rel="stylesheet" type="text/css" href="./doc.css" />')
         line('h1', '{} Contract Documentation'.format(name))
         devdoc = info['devdoc']
         if 'title' in devdoc:
@@ -361,6 +367,10 @@ def generate_docs(source, info, ast, out_dir):
             line('div', 'Contract documentation generated with eth-docgen')
 
         f.write(doc.getvalue())
+    
+    if not inline:
+        with open(os.path.join(out_dir, 'doc.css'), 'w') as f:
+            f.write(css)
 
 def get_solc():
     """Check whether solc is available."""

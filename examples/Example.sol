@@ -5,6 +5,7 @@ import "./Ownable.sol";
 /// @title A contract for testing eth-docgen
 /// @author Jane Doe
 /// @author John Doe
+/// @author George Dickel
 contract Example is Ownable {
     
     /// The number of things written to storage

@@ -1,0 +1,168 @@
+
+html,body {
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    margin: 0;
+    background-color: white;
+}
+
+#header {
+    background-color: white;
+}
+
+#__doc_copy {
+    position: absolute;
+    width: 0;
+    left: -200px;
+}
+
+#content {
+    font-size: 1em;
+    padding-top: 64px;
+    width: 80%;
+    margin: 0 auto;
+    text-align: left;
+    font-size: 0.95em;
+}
+
+h1 {
+    font-size: 1.6em;
+    font-weight: 400;
+}
+
+h2 {
+    font-size: 1.4em;
+    font-weight: 500;
+    margin-bottom: 4px;
+    margin-top: 42px;
+}
+
+h3 {
+    font-size: 1.1em;
+    margin-top: 42px;
+    margin-bottom: 12px;
+}
+
+h4 {
+    margin-bottom: 8px;
+}
+
+#contract_info>div {
+    margin-bottom: 10px;
+}
+
+.copy_data>div {
+    position: relative;
+    float: left;
+    box-sizing: border-box;
+    padding: 6px 12px;
+    border: 1px dashed black;
+    cursor: pointer;
+    margin-bottom: 16px;
+}
+
+.copy_data>div:not(:last-child) {
+    border-right: none;
+}
+
+.copy_data>div:hover {
+    background-color: #fff2fa;
+}
+
+#pragmas {
+    clear: both;
+}
+
+#pragmas .item span:first-child {
+    color: #df3600;
+}
+
+.pragma_name {
+    color: #039BE5;
+}
+
+.section {
+    width: 80%;
+    border-spacing: 0;
+    background-color: #e7f2fa;
+    border-collapse: collapse;
+}
+
+.section th, .section td {
+    border: none;
+}
+
+.section th {
+    background-color: #6ab0de;
+    color: white;
+    padding: 10px 0 10px 12px;
+    font-weight: normal;
+}
+
+.section tr:first-child {
+    border-top: none;
+}
+
+.section tr {
+    border-top: none;
+    border-top: 1px solid #ddd;
+}
+
+.section td {
+    font-size: 0.9em;
+}
+
+.center {
+    text-align: center;
+}
+
+.info {
+    padding: 8px 0 8px 10px;
+}
+
+.name {
+    color: #039BE5;
+    font-size: 1.1em;
+}
+
+.type {
+    color: #8959A8;
+}
+td .type {
+    margin-top: 2px;
+    padding-left: 6px;
+}
+
+.description {
+    margin-top: 6px;
+}
+
+.visibility {
+    color: #060;
+}
+
+.function_sig {
+    margin-bottom: 12px;
+    font-size: 0.9em;
+}
+
+.function_desc {
+    margin-bottom: 20px;
+    font-size: 0.9em;
+}
+
+#returns th {
+    background-color: #f0b37e;
+}
+#returns td {
+    background-color: #ffedcc;
+}
+
+#footer {
+    margin-top: 48px;
+    margin-bottom: 12px;
+    height: 36px;
+    font-size: 0.8em;
+    color: #555;
+}
