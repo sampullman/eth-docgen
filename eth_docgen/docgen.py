@@ -80,21 +80,24 @@ def full_type(type_node):
     return type_node['attributes']['type']
 
 # variable is an AST node that represents a state variable
-def type_name(name_node, full=False):
-    
-    if name_node['name'] == 'ArrayTypeName':
-        if full:
-            return full_type(name_node)
-        return name_node['children'][0]['attributes']['name']+'[]'
+def type_name(decl_node, full=False):
+    if decl_node['name'] == 'ElementaryTypeName':
+        return decl_node['attributes']['name']
 
-    if name_node['name'] == 'Mapping':
-        key_name = type_name(name_node['children'][0])
-        value_name = type_name(name_node['children'][1])
+    type_node = decl_node['children'][0]
+    if type_node['name'] == 'ArrayTypeName':
+        if full:
+            return full_type(type_node)
+        return type_node['children'][0]['attributes']['name']+'[]'
+
+    if type_node['name'] == 'Mapping':
+        key_name = type_name(type_node['children'][0])
+        value_name = type_name(type_node['children'][1])
         return "mapping({} => {})".format(key_name, value_name)
     else:
         if full:
-            return full_type(name_node)
-        return name_node['attributes']['name']
+            return full_type(type_node)
+        return type_node['attributes']['name']
 
 def base_var_type(var_type):
     if var_type.startswith('mapping'):
@@ -146,7 +149,7 @@ def custom_display_fn(source_lines, showVisibility=False, comment_fn=var_comment
     cols = '1' if showVisibility else '2'
     def display_fn(tag, line, item):
         tname = type_name(item)
-        name = item['name']
+        name = item['attributes']['name']
         desc = '<br />'.join(comment_fn(source_lines, name, tname)['notice'])
 
         if showVisibility:
@@ -214,7 +217,7 @@ def var_list(param_node):
     return [(type_name(n), n['attributes']['name']) for n in param_node]
 
 def fn_signature(tag, line, text, function):
-    text(function['name']+'(')
+    text(function['attributes']['name']+'(')
     var_decls = var_list(function['children'][0]['children'])
     for i, var_decl in enumerate(var_decls):
         line('span', var_decl[0], klass='type')
@@ -242,10 +245,10 @@ def make_functions(tag, line, text, contract, meta_doc, source_lines):
 
     section_title(line, 'Functions')
     for function in state:
-        if function['name'] == '':
+        if function['attributes']['name'] == '':
             line('h3', 'Fallback function')
         else:
-            line('h3', function['name'])
+            line('h3', function['attributes']['name'])
 
         with tag('div', klass="function_sig"):
             fn_signature(tag, line, text, function)
@@ -255,7 +258,7 @@ def make_functions(tag, line, text, contract, meta_doc, source_lines):
 
         def display_fn(tag, line, item):
             tname = type_name(item)
-            name = item['name']
+            name = item['attributes']['name']
             desc = devdoc_param(meta_doc, signature, name)
             with tag('td', klass="info", colspan='2'):
                 line('span', name, klass='name')
