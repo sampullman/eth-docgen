@@ -1,6 +1,6 @@
 from yattag import Doc
-import json
-import re
+import os, subprocess, sys
+import json, re
 from cgi import escape
 
 def deconstruct_pragma(pragma):
@@ -77,24 +77,24 @@ def section(tag, line, id, title, data, display_fn):
                 display_fn(tag, line, item)
 
 def full_type(type_node):
-    return type_node['typeDescriptions']['typeString'].split()[0]
+    return type_node['attributes']['type']
 
 # variable is an AST node that represents a state variable
 def type_name(name_node, full=False):
     
-    if name_node['nodeType'] == 'ArrayTypeName':
+    if name_node['name'] == 'ArrayTypeName':
         if full:
             return full_type(name_node)
-        return name_node['baseType']['name']+'[]'
+        return name_node['children'][0]['attributes']['name']+'[]'
 
-    if name_node['nodeType'] == 'Mapping':
-        key_name = type_name(name_node['keyType'])
-        value_name = type_name(name_node['valueType'])
+    if name_node['name'] == 'Mapping':
+        key_name = type_name(name_node['children'][0])
+        value_name = type_name(name_node['children'][1])
         return "mapping({} => {})".format(key_name, value_name)
     else:
         if full:
             return full_type(name_node)
-        return name_node['name']
+        return name_node['attributes']['name']
 
 def base_var_type(var_type):
     if var_type.startswith('mapping'):
@@ -145,12 +145,12 @@ def var_comments(source_lines, name, var_type):
 def custom_display_fn(source_lines, showVisibility=False, comment_fn=var_comments):
     cols = '1' if showVisibility else '2'
     def display_fn(tag, line, item):
-        tname = type_name(item['typeName'])
+        tname = type_name(item)
         name = item['name']
         desc = '<br />'.join(comment_fn(source_lines, name, tname)['notice'])
 
         if showVisibility:
-            line('td', item['visibility'], klass="visibility center")
+            line('td', item['attributes']['visibility'], klass="visibility center")
         with tag('td', klass="info", colspan=cols):
             line('span', name, klass='name')
             line('span', tname, klass='type')
@@ -159,36 +159,36 @@ def custom_display_fn(source_lines, showVisibility=False, comment_fn=var_comment
     return display_fn
 
 def make_variables(tag, line, contract, source_lines):
-    state = filter(lambda x: x['nodeType']=='VariableDeclaration', contract)
+    state = filter(lambda x: x['name']=='VariableDeclaration', contract)
     section_title(line, 'State Variables')
     display_fn = custom_display_fn(source_lines, showVisibility=True)
     section(tag, line, 'state_vars', None, state, display_fn)
 
 def make_structs(tag, line, contract, source_lines):
-    state = filter(lambda x: x['nodeType']=='StructDefinition', contract)
+    state = filter(lambda x: x['name']=='StructDefinition', contract)
 
     section_title(line, 'Structs')
     for struct in state:
         display_fn = custom_display_fn(source_lines)
-        name = struct['name']
+        name = struct['attributes']['name']
         line('h3', name)
         comments = struct_comments(source_lines, name)
         if comments['notice']:
             line('div', '<br />'.join(comments['notice']), klass='function_desc')
-        section(tag, line, 'structs', 'Fields', struct['members'], display_fn)
+        section(tag, line, 'structs', 'Fields', struct['children'], display_fn)
 
 def make_events(tag, line, contract, source_lines):
-    state = filter(lambda x: x['nodeType']=='EventDefinition', contract)
+    state = filter(lambda x: x['name']=='EventDefinition', contract)
 
     section_title(line, 'Events')
     for event in state:
         display_fn = custom_display_fn(source_lines)
-        name = event['name']
+        name = event['attributes']['name']
         line('h3', name)
         comments = event_comments(source_lines, name)
         if comments['notice']:
             line('div', '<br />'.join(comments['notice']), klass='function_desc')
-        section(tag, line, 'events', 'Parameters', event['parameters']['parameters'], display_fn)
+        section(tag, line, 'events', 'Parameters', event['children'][0]['children'], display_fn)
 
 def userdoc_notice(meta_doc, fn_sig):
     methods = meta_doc['userdoc']['methods']
@@ -207,15 +207,15 @@ def devdoc_param(meta_doc, fn_sig, param):
     return ''
 
 def abi_signature(function):
-    params = ','.join(type_name(n, full=True) for n in function['parameters']['parameters'])
+    params = ','.join(type_name(n, full=True) for n in function['children'][0]['children'])
     return "{}({})".format(function['name'], params)
 
 def var_list(param_node):
-    return [(type_name(n['typeName']), n['name']) for n in param_node]
+    return [(type_name(n), n['attributes']['name']) for n in param_node]
 
 def fn_signature(tag, line, text, function):
     text(function['name']+'(')
-    var_decls = var_list(function['parameters']['parameters'])
+    var_decls = var_list(function['children'][0]['children'])
     for i, var_decl in enumerate(var_decls):
         line('span', var_decl[0], klass='type')
         text(' ')
@@ -224,11 +224,11 @@ def fn_signature(tag, line, text, function):
             text(', ')
     text(') ')
             
-    line('span', function['visibility'], klass='visibility')
-    if function['stateMutability'] != 'nonpayable':
-        line('span', ' '+function['stateMutability'], klass='mutability')
+    line('span', function['attributes']['visibility'], klass='visibility')
+    if function['attributes']['stateMutability'] != 'nonpayable':
+        line('span', ' '+function['attributes']['stateMutability'], klass='mutability')
     
-    returns = var_list(function['returnParameters']['parameters'])
+    returns = var_list(function['children'][1]['children'])
     if len(returns) != 0:
         text(' ')
     for i, ret in enumerate(returns):
@@ -238,7 +238,7 @@ def fn_signature(tag, line, text, function):
             text(', ')
 
 def make_functions(tag, line, text, contract, meta_doc, source_lines):
-    state = filter(lambda x: x['nodeType']=='FunctionDefinition', contract)
+    state = filter(lambda x: x['name']=='FunctionDefinition', contract)
 
     section_title(line, 'Functions')
     for function in state:
@@ -254,7 +254,7 @@ def make_functions(tag, line, text, contract, meta_doc, source_lines):
         line('div', userdoc_notice(meta_doc, signature), klass='function_desc')
 
         def display_fn(tag, line, item):
-            tname = type_name(item['typeName'])
+            tname = type_name(item)
             name = item['name']
             desc = devdoc_param(meta_doc, signature, name)
             with tag('td', klass="info", colspan='2'):
@@ -263,42 +263,84 @@ def make_functions(tag, line, text, contract, meta_doc, source_lines):
                 if desc:
                     line('div', desc, klass='description')
 
-        params = function['parameters']['parameters']
+        params = function['children'][0]['children']
         if len(params) > 0:
             section(tag, line, 'parameters', 'Parameters', params, display_fn)
-        returns = function['returnParameters']['parameters']
+        returns = function['children'][1]['children']
         if len(returns) > 0:
             section(tag, line, 'returns', 'Returns', returns, display_fn)
 
+def contract_info(filename, compile_result):
+    contract_name = filename.split('/')[-1].split('.')[0]
+    for source_name in compile_result:
+        if contract_name in source_name:
+            filename = source_name
+    
+    info_key = '{}:{}'.format(filename, contract_name)
+    info = compile_result['contracts'][info_key]
+    for k, v in info.items():
+        if k != "bin":
+            info[k] = json.loads(v)
+
+    ast = compile_result['sources'][filename]['AST']
+
+    return [info, ast]
+
+def compile_and_generate(contract, out_file):
+    solc = get_solc()
+    if not solc:
+        print("Error - solc not found in path")
+        return False
+
+    command = [solc, '--combined-json', 'abi,ast,bin,devdoc,interface,metadata,userdoc', contract]
+
+    proc = subprocess.Popen(command,
+                            stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+
+    stdoutdata, stderrdata = proc.communicate()
+
+    if proc.returncode != 0:
+        print("Compile failed!\n")
+        print(stdoutdata)
+        print(stderrdata)
+        sys.exit(1)
+    
+    output = json.loads(stdoutdata)
+    with open(contract, 'r') as f:
+        source = f.read()
+
+    [data, ast] = contract_info(contract, output)
+
+    generate_docs(source, data, ast, out_file)
+
 # Generate solidity html docs from metadata file
 #   produced using: solc --metadata ... 
-def docgen(abi_file, meta_file, out_file):
+def generate_docs(source, info, ast, out_file):
 
-    with open(abi_file, 'r') as f:
-        abi = json.load(f)
     pragmas = []
-    for node in abi['ast']['nodes']:
-        if node['nodeType'] == 'PragmaDirective':
-            pragmas.append(node['literals'])
-        elif node['nodeType'] == 'ContractDefinition':
-            contract = node['nodes']
-            base_contracts = [n['baseName']['name'] for n in node['baseContracts']]
-            name = node['name']
-            contract_doc = node['documentation']
-
-
-    with open(meta_file, 'r') as f:
-        metadata = json.load(f)
-        meta_doc = metadata['output']
+    base_contracts = []
+    for node in ast['children']:
+        if node['name'] == 'PragmaDirective':
+            pragmas.append(node['attributes']['literals'])
+        elif node['name'] == 'ContractDefinition':
+            contract = node['children']
+            #base_contracts = [n['baseName']['name'] for n in node['baseContracts']]
+            name = node['attributes']['name']
+            contract_doc = node['attributes']['documentation']
+    
+    metadata = info['metadata']
+    meta_doc = metadata['output']
     
     print('Compiler version: {}'.format(metadata['compiler']['version']))
-    source_lines = abi['source'].split('\n')
+    source_lines = source.split('\n')
 
     with open(out_file, 'w') as f:
         doc, tag, text, line = Doc().ttl()
-        make_js(line, json.dumps(abi['abi']), abi['source'], abi['bytecode'])
+        make_js(line, json.dumps(info['abi']), source, info['bin'])
         line('h1', '{} Contract Documentation'.format(name))
-        devdoc = meta_doc['devdoc']
+        devdoc = info['devdoc']
         if 'title' in devdoc:
             line('div', devdoc['title'], klass='title_desc')
 
@@ -315,9 +357,8 @@ def docgen(abi_file, meta_file, out_file):
 
         f.write(doc.getvalue())
 
+def get_solc():
+    """Check whether solc is available."""
+    from shutil import which
 
-if __name__ == '__main__':
-    contract_abi = './build/contracts/TreasureHunt.json'
-    contract_metadata = './build/contracts/TreasureHunt/TreasureHunt_meta.json'
-    ouptut_file = '../website/home/templates/TreasureHunt.html'
-    docgen(contract_abi, contract_metadata, ouptut_file)
+    return which(os.environ.get('SOLC_BINARY', 'solc'))
