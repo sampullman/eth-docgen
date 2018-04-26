@@ -6,4 +6,4 @@ print(here)
 
 if __name__ == '__main__':
     [source, info, ast] = compile_contract(path.join(here, 'examples/Example.sol'))
-    generate_docs(source, info, ast, path.join(here, 'examples/build/'))
+    generate_docs(source, info, ast, path.join(here, 'examples/build/'), inline=False)

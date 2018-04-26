@@ -25,7 +25,7 @@ setup(
 
     entry_points={
         'console_scripts': [
-            'eth-docgen=docgen:main',
+            'eth-docgen=eth_docgen:main',
         ],
     },
 

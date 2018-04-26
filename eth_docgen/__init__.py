@@ -1,7 +1,8 @@
 
-import sys, argparse
+import sys, os, argparse
+from os import path
 from argparse import ArgumentTypeError
-from .docgen import generate_docs, compile_contract
+from .docgen import compile_contract, generate_docs
 
 def error_exit(message):
     print('\n{}\n'.format(message))
@@ -11,19 +12,13 @@ def main():
     parser = argparse.ArgumentParser(description="Ethereum HTML Document Generator", epilog="\n\n")
     parser.add_argument("-o", "--output", metavar='dir', help="Output directory")
 
-    parser.add_argument("-a", "--abi", metavar='file', help="Contract abi", required=True)
+    parser.add_argument("-c", "--contract", metavar='file', help="Contract to generate docs for", required=True)
 
-    parser.add_argument("-m", "--metadata", metavar='file', help="Contract metadata", required=True)
-
-    parser.add_argument("-s", "--style", help="Inline CSS with output HTML")
+    parser.add_argument("-s", "--style", help="Inline CSS with output HTML", action='store_true')
 
     args = parser.parse_args()
     
-    output = open(args.output, 'w') if args.output else sys.stdout
-    abi = args.abi
-    metadata = args.metadata
+    out_dir = path.join(os.getcwd(), args.output) if args.output else None
 
-    generate_docs(abi, metadata, output, inline=args.style)
-
-    if output is not sys.stdout:
-        output.close()
+    [source, info, ast] = compile_contract(path.join(os.getcwd(), args.contract))
+    generate_docs(source, info, ast, out_dir, inline=args.style)

@@ -355,32 +355,38 @@ def generate_docs(source, info, ast, out_dir, inline=False):
     with open(CSS_FILE, 'r') as f:
         css = f.read()
 
-    pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True) 
-    out_file = os.path.join(out_dir, '{}.html'.format(name))
-    with open(out_file, 'w') as f:
-        doc, tag, text, line = Doc().ttl()
-        make_js(line, json.dumps(info['abi']), source, info['bin'])
-        if inline:
-            line('style', css)
-        else:
-            doc.asis('<link rel="stylesheet" type="text/css" href="./doc.css" />')
-        line('h1', '{} Contract Documentation'.format(name))
-        devdoc = info['devdoc']
-        if 'title' in devdoc:
-            line('div', devdoc['title'], klass='title_desc')
+    if out_dir:
+        pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
+        html_file = open(os.path.join(out_dir, '{}.html'.format(name)), 'w')
+    else:
+        html_file = sys.stdout
 
-        make_overview(tag, line, contract_doc, base_contracts, pragmas)
+    doc, tag, text, line = Doc().ttl()
+    make_js(line, json.dumps(info['abi']), source, info['bin'])
+    if inline:
+        line('style', css)
+    else:
+        doc.asis('<link rel="stylesheet" type="text/css" href="./doc.css" />')
+    line('h1', '{} Contract Documentation'.format(name))
+    devdoc = info['devdoc']
+    if 'title' in devdoc:
+        line('div', devdoc['title'], klass='title_desc')
 
-        make_variables(tag, line, contract, source_lines)
-        make_structs(tag, line, contract, source_lines)
-        make_events(tag, line, contract, source_lines)
-        make_functions(tag, line, text, contract, meta_doc, source_lines)
+    make_overview(tag, line, contract_doc, base_contracts, pragmas)
 
-        with tag('div', id='footer'):
-            line('hr', '')
-            line('div', 'Contract documentation generated with eth-docgen')
+    make_variables(tag, line, contract, source_lines)
+    make_structs(tag, line, contract, source_lines)
+    make_events(tag, line, contract, source_lines)
+    make_functions(tag, line, text, contract, meta_doc, source_lines)
 
-        f.write(doc.getvalue())
+    with tag('div', id='footer'):
+        line('hr', '')
+        line('div', 'Contract documentation generated with eth-docgen')
+
+    html_file.write(doc.getvalue())
+
+    if html_file is not sys.stdout:
+        html_file.close()
     
     if not inline:
         with open(os.path.join(out_dir, 'doc.css'), 'w') as f:
