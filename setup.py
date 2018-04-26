@@ -15,7 +15,9 @@ setup(
     long_description=long_description,
     long_description_content_type='text/markdown',
     url='https://github.com/sampullman/eth-docgen/',
-
+    download_url='https://github.com/sampullman/eth-docgen/archive/0.1.0.tar.gz',
+    author='Sam Pullman',
+    author_email='sampullman@gmail.com',
     classifiers=[
     ],
 
