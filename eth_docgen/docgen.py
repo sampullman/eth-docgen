@@ -119,9 +119,9 @@ def glean_comments(source_lines, index):
                 words = c.split()
                 if len(words) > 1:
                     comments[words[1]] = ' '.join(words[2:])
-            else:
-                if c.startswith('@notice'):
-                    c = c[7:].strip()
+            elif c.startswith('@notice'):
+                comments['notice'].append(c[7:].strip())
+            elif not c.startswith('@'):
                 comments['notice'].append(c)
         else:
             return comments
@@ -140,9 +140,12 @@ def event_comments(source_lines, name):
 def struct_comments(source_lines, name):
     return generic_comments(source_lines, r'struct\s+?{}\s*?{{'.format(name))
 
+def function_comments(source_lines, name):
+    return generic_comments(source_lines, r'function\s*?{}\(.*?{{'.format(name))
+
 def var_comments(source_lines, name, var_type):
     var_type = base_var_type(var_type)
-    regex = r'.*?{}[ \[\]()=>a-zA-Z]*?\s*?{}\s*?(=.*?)?;.*?'.format(var_type, name)
+    regex = r'.*?{}[ \[\]()=>a-zA-Z0-9]*?\s*?{}\s*?(=.*?)?;.*?'.format(var_type, name)
     return generic_comments(source_lines, regex)
 
 def custom_display_fn(source_lines, showVisibility=False, comment_fn=var_comments):
@@ -203,15 +206,15 @@ def userdoc_notice(meta_doc, fn_sig):
 
 def devdoc_param(meta_doc, fn_sig, param):
     methods = meta_doc['devdoc']['methods']
-    if fn_sig in methods and 'params' in methods[fn_sig]:
-        param_doc = methods[fn_sig]['params']
-        if param in param_doc:
-            return param_doc[param]
-    return ''
+    return methods[fn_sig]['params'][param]
+
+def devdoc_return(meta_doc, fn_sig):
+    methods = meta_doc['devdoc']['methods']
+    return methods[fn_sig]['return']
 
 def abi_signature(function):
     params = ','.join(type_name(n['children'][0], full=True) for n in function['children'][0]['children'])
-    return "{}({})".format(function['name'], params)
+    return "{}({})".format(function['attributes']['name'], params)
 
 def var_list(param_node):
     return [(type_name(n['children'][0]), n['attributes']['name']) for n in param_node]
@@ -245,7 +248,9 @@ def make_functions(tag, line, text, contract, meta_doc, source_lines):
 
     section_title(line, 'Functions')
     for function in state:
-        if function['attributes']['name'] == '':
+        fn_name = function['attributes']['name']
+
+        if fn_name == '':
             line('h3', 'Fallback function')
         else:
             line('h3', function['attributes']['name'])
@@ -254,24 +259,33 @@ def make_functions(tag, line, text, contract, meta_doc, source_lines):
             fn_signature(tag, line, text, function)
 
         signature = abi_signature(function)
-        line('div', userdoc_notice(meta_doc, signature), klass='function_desc')
+        
+        comments = function_comments(source_lines, fn_name)
+        if comments['notice']:
+            line('div', ' '.join(comments['notice'][::-1]), klass='function_desc')
 
-        def display_fn(tag, line, item):
-            tname = type_name(item['children'][0])
-            name = item['attributes']['name']
-            desc = devdoc_param(meta_doc, signature, name)
-            with tag('td', klass="info", colspan='2'):
-                line('span', name, klass='name')
-                line('span', tname, klass='type')
-                if desc:
-                    line('div', desc, klass='description')
+        def param_display(param=True):
+            def display_fn(tag, line, item):
+                tname = type_name(item['children'][0])
+                name = item['attributes']['name']
+                if param:
+                    desc = devdoc_param(meta_doc, signature, name)
+                else:
+                    desc = devdoc_return(meta_doc, signature)
+
+                with tag('td', klass="info", colspan='2'):
+                    line('span', name, klass='name')
+                    line('span', tname, klass='type')
+                    if desc:
+                        line('div', desc, klass='description')
+            return display_fn
 
         params = function['children'][0]['children']
         if len(params) > 0:
-            section(tag, line, 'parameters', 'Parameters', params, display_fn)
+            section(tag, line, 'parameters', 'Parameters', params, param_display())
         returns = function['children'][1]['children']
         if len(returns) > 0:
-            section(tag, line, 'returns', 'Returns', returns, display_fn)
+            section(tag, line, 'returns', 'Returns', returns, param_display(param=False))
 
 def contract_info(filename, compile_result):
     contract_name = filename.split('/')[-1].split('.')[0]
