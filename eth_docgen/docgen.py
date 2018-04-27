@@ -204,11 +204,19 @@ def userdoc_notice(meta_doc, fn_sig):
 
 def devdoc_param(meta_doc, fn_sig, param):
     methods = meta_doc['devdoc']['methods']
-    return methods[fn_sig]['params'][param]
+    if fn_sig in methods:
+        fn_doc = methods[fn_sig]
+        if 'params' in fn_doc:
+            return fn_doc['params'][param]
+    return ''
 
 def devdoc_return(meta_doc, fn_sig):
     methods = meta_doc['devdoc']['methods']
-    return methods[fn_sig]['return']
+    if fn_sig in methods:
+        fn_doc = methods[fn_sig]
+        if 'return' in fn_doc:
+            return fn_doc['return']
+    return ''
 
 def abi_signature(function):
     params = ','.join(type_name(n['children'][0], full=True) for n in function['children'][0]['children'])

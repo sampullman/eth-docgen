@@ -8,14 +8,16 @@ here = path.abspath(path.dirname(__file__))
 with open(path.join(here, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
+VERSION = '0.1.3'
+
 setup(
     name='eth-docgen',
-    version='0.1.2',
+    version=VERSION,
     description='Generate html documentation from Ethereum smart contracts',
     long_description=long_description,
     long_description_content_type='text/markdown',
     url='https://github.com/sampullman/eth-docgen/',
-    download_url='https://github.com/sampullman/eth-docgen/archive/0.1.2.tar.gz',
+    download_url='https://github.com/sampullman/eth-docgen/archive/{}.tar.gz'.format(VERSION),
     author='Sam Pullman',
     author_email='sampullman@gmail.com',
     classifiers=[
