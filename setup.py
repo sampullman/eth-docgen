@@ -10,12 +10,12 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='eth-docgen',
-    version='0.1.0',
+    version='0.1.1',
     description='Generate html documentation from Ethereum smart contracts',
     long_description=long_description,
     long_description_content_type='text/markdown',
     url='https://github.com/sampullman/eth-docgen/',
-    download_url='https://github.com/sampullman/eth-docgen/archive/0.1.0.tar.gz',
+    download_url='https://github.com/sampullman/eth-docgen/archive/0.1.1.tar.gz',
     author='Sam Pullman',
     author_email='sampullman@gmail.com',
     classifiers=[
@@ -24,6 +24,7 @@ setup(
     keywords='ethereum documentation',
     packages=find_packages(exclude=['contrib', 'docs', 'tests']),
     install_requires=['yattag>=1.10.0'],
+    include_package_data=True,
 
     entry_points={
         'console_scripts': [

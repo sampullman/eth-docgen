@@ -1,10 +1,8 @@
 from yattag import Doc
 import os, pathlib, shutil, subprocess, sys
 import json, re
+import pkg_resources
 from cgi import escape
-
-DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'data'))
-CSS_FILE = os.path.join(DATA_DIR, 'doc.css')
 
 def deconstruct_pragma(pragma):
     if pragma[0] == 'solidity':
@@ -352,7 +350,8 @@ def generate_docs(source, info, ast, out_dir, inline=False):
     print('Compiler version: {}'.format(metadata['compiler']['version']))
     source_lines = source.split('\n')
 
-    with open(CSS_FILE, 'r') as f:
+    css_file = pkg_resources.resource_filename('eth_docgen', 'data/doc.css')
+    with open(css_file, 'r') as f:
         css = f.read()
 
     if out_dir:
