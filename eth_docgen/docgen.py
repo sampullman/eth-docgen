@@ -3,6 +3,7 @@ import os, pathlib, shutil, subprocess, sys
 import json, re
 import pkg_resources
 from cgi import escape
+from .model import Contract
 
 def deconstruct_pragma(pragma):
     if pragma[0] == 'solidity':
@@ -13,8 +14,8 @@ def deconstruct_pragma(pragma):
 def make_interface(source):
     return source
 
-def make_js(line, abi, source, bytecode):
-    interface = make_interface(source);
+def make_js(line, abi, contract, bytecode):
+    interface = make_interface(contract.source);
     line('script', """
         function copyToClipboard(text) {{
             var textArea = document.getElementById('__doc_copy');
@@ -34,13 +35,13 @@ def make_js(line, abi, source, bytecode):
             document.getElementById("copy_source").onclick = copyOnClick({source});
             document.getElementById("copy_bytecode").onclick = copyOnClick('{bytecode}');
         }}
-    """.format(abi=abi, source=json.dumps(source), bytecode=escape(bytecode)))
+    """.format(abi=abi, source=json.dumps(contract.source), bytecode=escape(bytecode)))
 
-def make_overview(tag, line, contract_doc, base_contracts, pragmas):
+def make_overview(tag, line, contract):
     with tag('div', id="contract_info"):
         section_title(line, 'Contract Overview')
 
-        contract_doc = [line.strip() for line in contract_doc.split('\n')]
+        contract_doc = [line.strip() for line in contract.docs.split('\n')]
         authors = []
         for doc_line in contract_doc:
             if doc_line.startswith('@author'):
@@ -51,8 +52,8 @@ def make_overview(tag, line, contract_doc, base_contracts, pragmas):
             else:
                 authors_text = ', '.join(authors[:-1]) + ' and ' + authors[-1]
             line('div', 'Authored by {}'.format(authors_text))
-        if len(base_contracts) > 0:
-            line('div', 'Inherits from {}'.format(', '.join(base_contracts)), klass='inherit')
+        if len(contract.parents) > 0:
+            line('div', 'Inherits from {}'.format(', '.join(contract.parents)), klass='inherit')
         line('h4', 'Click to copy data')
         line('textarea', '', id='__doc_copy')
         with tag('div', klass='copy_data'):
@@ -61,11 +62,11 @@ def make_overview(tag, line, contract_doc, base_contracts, pragmas):
             line('div', 'Bytecode', id='copy_bytecode')
             line('div', 'Interface', id='copy_interface')
 
-        if len(pragmas) > 0:
+        if len(contract.pragmas) > 0:
             def display_fn(tag, line, item):
                 line('td', item[0], klass='pragma_name center')
                 line('td', item[1], klass='info')
-            pragma_data = [deconstruct_pragma(pragma) for pragma in pragmas]
+            pragma_data = [deconstruct_pragma(pragma) for pragma in contract.pragmas]
             section(tag, line, 'pragmas', 'Pragmas', pragma_data, display_fn)
 
 def section_title(line, name):
@@ -167,34 +168,34 @@ def custom_display_fn(source_lines, showVisibility=False, comment_fn=var_comment
                 line('div', desc, klass='description')
     return display_fn
 
-def make_variables(tag, line, contract, source_lines):
-    state = filter(lambda x: x['name']=='VariableDeclaration', contract)
+def make_variables(tag, line, contract):
+    state = filter(lambda x: x['name']=='VariableDeclaration', contract.ast)
     section_title(line, 'State Variables')
-    display_fn = custom_display_fn(source_lines, showVisibility=True)
+    display_fn = custom_display_fn(contract.source_lines, showVisibility=True)
     section(tag, line, 'state_vars', None, state, display_fn)
 
-def make_structs(tag, line, contract, source_lines):
-    state = filter(lambda x: x['name']=='StructDefinition', contract)
+def make_structs(tag, line, contract):
+    state = filter(lambda x: x['name']=='StructDefinition', contract.ast)
 
     section_title(line, 'Structs')
     for struct in state:
-        display_fn = custom_display_fn(source_lines)
+        display_fn = custom_display_fn(contract.source_lines)
         name = struct['attributes']['name']
         line('h3', name)
-        comments = struct_comments(source_lines, name)
+        comments = struct_comments(contract.source_lines, name)
         if comments['notice']:
             line('div', '<br />'.join(comments['notice']), klass='function_desc')
         section(tag, line, 'structs', 'Fields', struct['children'], display_fn)
 
-def make_events(tag, line, contract, source_lines):
-    state = filter(lambda x: x['name']=='EventDefinition', contract)
+def make_events(tag, line, contract):
+    state = filter(lambda x: x['name']=='EventDefinition', contract.ast)
 
     section_title(line, 'Events')
     for event in state:
-        display_fn = custom_display_fn(source_lines)
+        display_fn = custom_display_fn(contract.source_lines)
         name = event['attributes']['name']
         line('h3', name)
-        comments = event_comments(source_lines, name)
+        comments = event_comments(contract.source_lines, name)
         if comments['notice']:
             line('div', '<br />'.join(comments['notice']), klass='function_desc')
         section(tag, line, 'events', 'Parameters', event['children'][0]['children'], display_fn)
@@ -254,8 +255,8 @@ def fn_signature(tag, line, text, function):
         if i != len(returns) - 1:
             text(', ')
 
-def make_functions(tag, line, text, contract, meta_doc, source_lines):
-    state = filter(lambda x: x['name']=='FunctionDefinition', contract)
+def make_functions(tag, line, text, contract, meta_doc):
+    state = filter(lambda x: x['name']=='FunctionDefinition', contract.ast)
 
     section_title(line, 'Functions')
     for function in state:
@@ -271,7 +272,7 @@ def make_functions(tag, line, text, contract, meta_doc, source_lines):
 
         signature = abi_signature(function)
         
-        comments = function_comments(source_lines, fn_name)
+        comments = function_comments(contract.source_lines, fn_name)
         if comments['notice']:
             line('div', ' '.join(comments['notice'][::-1]), klass='function_desc')
 
@@ -342,26 +343,30 @@ def compile_contract(contract):
     [info, ast] = contract_info(contract, output)
     return [source, info, ast]
 
-# Generate solidity html docs from metadata file
-#   produced using: solc --metadata ... 
-def generate_docs(source, info, ast, out_dir, inline=False):
+def parse_contract(source, info, ast):
 
-    pragmas = []
-    base_contracts = []
+    contract = Contract(source)
+
     for node in ast['children']:
         if node['name'] == 'PragmaDirective':
-            pragmas.append(node['attributes']['literals'])
+            contract.add_pragma(node['attributes']['literals'])
         elif node['name'] == 'ContractDefinition':
-            contract = node['children']
+            contract.ast = node['children']
             #base_contracts = [n['baseName']['name'] for n in node['baseContracts']]
-            name = node['attributes']['name']
-            contract_doc = node['attributes']['documentation']
+            contract.name = node['attributes']['name']
+            contract.docs = node['attributes']['documentation']
+    
+    return contract
+
+# Generate solidity html docs from metadata file
+#   produced using: solc --metadata ... 
+def generate_docs(source, info, ast, out_dir, inline=False):    
     
     metadata = info['metadata']
     meta_doc = metadata['output']
+    contract = parse_contract(source, info, ast)
     
     print('Compiler version: {}'.format(metadata['compiler']['version']))
-    source_lines = source.split('\n')
 
     css_file = pkg_resources.resource_filename('eth_docgen', 'data/doc.css')
     with open(css_file, 'r') as f:
@@ -369,27 +374,27 @@ def generate_docs(source, info, ast, out_dir, inline=False):
 
     if out_dir:
         pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
-        html_file = open(os.path.join(out_dir, '{}.html'.format(name)), 'w')
+        html_file = open(os.path.join(out_dir, '{}.html'.format(contract.name)), 'w')
     else:
         html_file = sys.stdout
 
     doc, tag, text, line = Doc().ttl()
-    make_js(line, json.dumps(info['abi']), source, info['bin'])
+    make_js(line, json.dumps(info['abi']), contract, info['bin'])
     if inline:
         line('style', css)
     else:
         doc.asis('<link rel="stylesheet" type="text/css" href="./doc.css" />')
-    line('h1', '{} Contract Documentation'.format(name))
+    line('h1', '{} Contract Documentation'.format(contract.name))
     devdoc = info['devdoc']
     if 'title' in devdoc:
         line('div', devdoc['title'], klass='title_desc')
 
-    make_overview(tag, line, contract_doc, base_contracts, pragmas)
+    make_overview(tag, line, contract)
 
-    make_variables(tag, line, contract, source_lines)
-    make_structs(tag, line, contract, source_lines)
-    make_events(tag, line, contract, source_lines)
-    make_functions(tag, line, text, contract, meta_doc, source_lines)
+    make_variables(tag, line, contract)
+    make_structs(tag, line, contract)
+    make_events(tag, line, contract)
+    make_functions(tag, line, text, contract, meta_doc)
 
     with tag('div', id='footer'):
         line('hr', '')
