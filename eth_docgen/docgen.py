@@ -10,7 +10,11 @@ def deconstruct_pragma(pragma):
         if pragma[1] == '^':
             return [pragma[0], 'Solidity version must be greater than {}'.format(version)]
 
+def make_interface(source):
+    return source
+
 def make_js(line, abi, source, bytecode):
+    interface = make_interface(source);
     line('script', """
         function copyToClipboard(text) {{
             var textArea = document.getElementById('__doc_copy');
@@ -55,6 +59,7 @@ def make_overview(tag, line, contract_doc, base_contracts, pragmas):
             line('div', 'ABI', id='copy_abi')
             line('div', 'Source', id='copy_source')
             line('div', 'Bytecode', id='copy_bytecode')
+            line('div', 'Interface', id='copy_interface')
 
         if len(pragmas) > 0:
             def display_fn(tag, line, item):
