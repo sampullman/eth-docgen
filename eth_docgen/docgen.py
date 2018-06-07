@@ -11,11 +11,22 @@ def deconstruct_pragma(pragma):
         if pragma[1] == '^':
             return [pragma[0], 'Solidity version must be greater than {}'.format(version)]
 
-def make_interface(source):
-    return source
+def make_interface(abi):
+    interface = ['']
+    for item in abi:
+        if item['type'] == 'function':
+            pass
+        elif item['type'] == 'fallback':
+            pass
+        elif item['type'] == 'event':
+            pass
+    return '\n'.join(interface)
 
-def make_js(line, abi, contract, bytecode):
-    interface = make_interface(contract.source);
+def make_js(line, contract):
+    abi = json.dumps(contract.abi)
+    bytecode = escape(contract.bytecode)
+    source = json.dumps(contract.source)
+    interface = make_interface(contract.abi)
     line('script', """
         function copyToClipboard(text) {{
             var textArea = document.getElementById('__doc_copy');
@@ -35,7 +46,7 @@ def make_js(line, abi, contract, bytecode):
             document.getElementById("copy_source").onclick = copyOnClick({source});
             document.getElementById("copy_bytecode").onclick = copyOnClick('{bytecode}');
         }}
-    """.format(abi=abi, source=json.dumps(contract.source), bytecode=escape(bytecode)))
+    """.format(abi=abi, source=source, bytecode=bytecode))
 
 def make_overview(tag, line, contract):
     with tag('div', id="contract_info"):
@@ -255,7 +266,7 @@ def fn_signature(tag, line, text, function):
         if i != len(returns) - 1:
             text(', ')
 
-def make_functions(tag, line, text, contract, meta_doc):
+def make_functions(tag, line, text, contract):
     state = filter(lambda x: x['name']=='FunctionDefinition', contract.ast)
 
     section_title(line, 'Functions')
@@ -281,9 +292,9 @@ def make_functions(tag, line, text, contract, meta_doc):
                 tname = type_name(item['children'][0])
                 name = item['attributes']['name']
                 if param:
-                    desc = devdoc_param(meta_doc, signature, name)
+                    desc = devdoc_param(contract.meta_doc, signature, name)
                 else:
-                    desc = devdoc_return(meta_doc, signature)
+                    desc = devdoc_return(contract.meta_doc, signature)
 
                 with tag('td', klass="info", colspan='2'):
                     line('span', name, klass='name')
@@ -345,7 +356,7 @@ def compile_contract(contract):
 
 def parse_contract(source, info, ast):
 
-    contract = Contract(source)
+    contract = Contract(source, info)
 
     for node in ast['children']:
         if node['name'] == 'PragmaDirective':
@@ -362,11 +373,9 @@ def parse_contract(source, info, ast):
 #   produced using: solc --metadata ... 
 def generate_docs(source, info, ast, out_dir, inline=False):    
     
-    metadata = info['metadata']
-    meta_doc = metadata['output']
     contract = parse_contract(source, info, ast)
     
-    print('Compiler version: {}'.format(metadata['compiler']['version']))
+    print('Compiler version: {}'.format(contract.compiler_version))
 
     css_file = pkg_resources.resource_filename('eth_docgen', 'data/doc.css')
     with open(css_file, 'r') as f:
@@ -379,7 +388,7 @@ def generate_docs(source, info, ast, out_dir, inline=False):
         html_file = sys.stdout
 
     doc, tag, text, line = Doc().ttl()
-    make_js(line, json.dumps(info['abi']), contract, info['bin'])
+    make_js(line, contract)
     if inline:
         line('style', css)
     else:
@@ -394,7 +403,7 @@ def generate_docs(source, info, ast, out_dir, inline=False):
     make_variables(tag, line, contract)
     make_structs(tag, line, contract)
     make_events(tag, line, contract)
-    make_functions(tag, line, text, contract, meta_doc)
+    make_functions(tag, line, text, contract)
 
     with tag('div', id='footer'):
         line('hr', '')
