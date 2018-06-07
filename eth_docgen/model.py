@@ -4,7 +4,7 @@ class Contract:
     def __init__(self, source, info):
         self.source = source
         self.source_lines = source.split('\n')
-        self.parents = []
+        self.parent_names = []
         self.pragmas = []
         self.name = None
         self.docs = None
@@ -16,3 +16,6 @@ class Contract:
 
     def add_pragma(self, pragma):
         self.pragmas.append(pragma)
+
+    def add_parent(self, parent_name):
+        self.parent_names.append(parent_name)

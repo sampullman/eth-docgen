@@ -11,22 +11,47 @@ def deconstruct_pragma(pragma):
         if pragma[1] == '^':
             return [pragma[0], 'Solidity version must be greater than {}'.format(version)]
 
-def make_interface(abi):
-    interface = ['']
-    for item in abi:
+def make_interface_fn(item, is_event):
+    def param(input):
+        indexed = ""
+        if is_event and input['indexed']:
+            indexed = "indexed "
+        name = input['name']
+        name = (" "+name) if name else ""
+        return indexed + input['type'] + name
+
+    title = "event" if is_event else "function"
+    public = "" if is_event else " public"
+
+    inputs = ', '.join(param(i) for i in item['inputs'])
+    fn = '    {} {}({}){}'.format(title, item['name'], inputs, public)
+    if (not is_event) and item['payable']:
+        fn = fn + " payable"
+    return fn + ";"
+
+def make_interface(contract):
+    inherits = ''
+    if contract.parent_names:
+        inherits = 'is {} '.format(', '.join(contract.parent_names))
+    interface = ['interface {} {}{{\n'.format(contract.name, inherits)]
+
+    for item in contract.abi:
         if item['type'] == 'function':
-            pass
+            interface.append(make_interface_fn(item, False))
+
         elif item['type'] == 'fallback':
-            pass
+            interface.append('    function() public payable;')
         elif item['type'] == 'event':
-            pass
-    return '\n'.join(interface)
+            interface.append(make_interface_fn(item, True))
+
+    return '\n'.join(interface) + "\n\n}\n"
 
 def make_js(line, contract):
     abi = json.dumps(contract.abi)
     bytecode = escape(contract.bytecode)
     source = json.dumps(contract.source)
-    interface = make_interface(contract.abi)
+    interface = json.dumps(make_interface(contract))
+
     line('script', """
         function copyToClipboard(text) {{
             var textArea = document.getElementById('__doc_copy');
@@ -45,8 +70,9 @@ def make_js(line, contract):
             document.getElementById("copy_abi").onclick = copyOnClick('{abi}');
             document.getElementById("copy_source").onclick = copyOnClick({source});
             document.getElementById("copy_bytecode").onclick = copyOnClick('{bytecode}');
+            document.getElementById("copy_interface").onclick = copyOnClick({interface});
         }}
-    """.format(abi=abi, source=source, bytecode=bytecode))
+    """.format(abi=abi, source=source, bytecode=bytecode, interface=interface))
 
 def make_overview(tag, line, contract):
     with tag('div', id="contract_info"):
@@ -63,8 +89,8 @@ def make_overview(tag, line, contract):
             else:
                 authors_text = ', '.join(authors[:-1]) + ' and ' + authors[-1]
             line('div', 'Authored by {}'.format(authors_text))
-        if len(contract.parents) > 0:
-            line('div', 'Inherits from {}'.format(', '.join(contract.parents)), klass='inherit')
+        if len(contract.parent_names) > 0:
+            line('div', 'Inherits from {}'.format(', '.join(contract.parent_names)), klass='inherit')
         line('h4', 'Click to copy data')
         line('textarea', '', id='__doc_copy')
         with tag('div', klass='copy_data'):
@@ -366,6 +392,10 @@ def parse_contract(source, info, ast):
             #base_contracts = [n['baseName']['name'] for n in node['baseContracts']]
             contract.name = node['attributes']['name']
             contract.docs = node['attributes']['documentation']
+
+            parents = filter(lambda x: x['name']=='InheritanceSpecifier', contract.ast)
+            for p in parents:
+                contract.add_parent(p['children'][0]['attributes']['name'])
     
     return contract
 
