@@ -7,9 +7,12 @@ from .model import Contract
 
 def deconstruct_pragma(pragma):
     if pragma[0] == 'solidity':
-        version = ''.join(pragma[2:])
         if pragma[1] == '^':
+            version = ''.join(pragma[2:])
             return [pragma[0], 'Solidity version must be greater than {}'.format(version)]
+        else:
+            version = ''.join(pragma[1:])
+            return [pragma[0], 'Solidity version must be equal to {}'.format(version)]
 
 def make_interface_fn(item, is_event):
     def param(input):
