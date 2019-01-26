@@ -1,4 +1,4 @@
-pragma solidity ^0.4.21;
+pragma solidity ^0.5.0;
 
 import "./Ownable.sol";
 
@@ -43,7 +43,7 @@ contract Example is Ownable {
     /// @notice Admin function to update the location at `index`
     /// @dev Create a new ImportantThings if `writeCount` % 10 == 0
     /// @param thing The important thing to store
-    function write(string thing) external {
+    function write(string calldata thing) external {
         
         if(writeCount % 10 == 0) {
             ImportantThings memory newContainer;
@@ -63,9 +63,10 @@ contract Example is Ownable {
     /// @param id The container id
     /// @param account The address of the original writer
     /// @return A string from storage
-    function read(uint id, address account) public view returns(string) {
+    function read(uint id, address account) public view returns(string memory) {
         require(id < thingsList.length);
-        return thingsList[id].things[account];
+        string memory thing = thingsList[id].things[account];
+        return thing;
     }
 
     /// @notice Donate the message value to the pot
@@ -74,7 +75,7 @@ contract Example is Ownable {
     }
 
     /// @notice Funds sent to the contract are considered donations
-    function() public payable {
+    function() external payable {
         donate();
     }
 
@@ -85,7 +86,7 @@ contract Example is Ownable {
 
     /// @notice Admin failsafe for destroying the contract
     function kill() onlyOwner public {
-        selfdestruct(owner);
+        selfdestruct(address(uint160(address(owner))));
     }
 
 }
